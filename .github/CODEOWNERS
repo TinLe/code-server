@@ -1,2 +1,3 @@
-* @coderasher @kylecarbs
-Dockerfile @nhooyr
+* @coder/code-server-reviewers
+
+ci/helm-chart/ @Matthew-Beckett @alexgorbatchev

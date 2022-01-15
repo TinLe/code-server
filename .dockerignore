@@ -1,9 +1,3 @@
-Dockerfile
-# Docs
-doc/
-# GitHub stuff
-.github
-.gitignore
-.travis.yml
-LICENSE
-README.md
+**
+!release-packages
+!ci
