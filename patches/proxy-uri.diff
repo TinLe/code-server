@@ -10,6 +10,22 @@ extensions, use --extensions-dir, or symlink it).
 
 This has e2e tests.
 
+For the `asExternalUri` changes, you'll need to test manually by:
+1. running code-server with the test extension
+2. Command Palette > code-server: asExternalUri test
+3. input a url like http://localhost:3000
+4. it should show a notification and show output as <code-server>/proxy/3000
+
+Do the same thing but set `VSCODE_PROXY_URI: "https://{{port}}-main-workspace-name-user-name.coder.com"`
+and the output should replace `{{port}}` with port used in input url.
+
+This also enables the forwared ports view panel by default.
+
+Lastly, it adds a tunnelProvider so that ports are forwarded using code-server's
+built-in proxy. You can test this by starting a server i.e. `python3 -m
+http.server` and it should show a notification and show up in the ports panel
+using the /proxy/port.
+
 Index: code-server/lib/vscode/src/vs/base/common/product.ts
 ===================================================================
 --- code-server.orig/lib/vscode/src/vs/base/common/product.ts
@@ -26,66 +42,62 @@ Index: code-server/lib/vscode/src/vs/platform/remote/browser/remoteAuthorityReso
 ===================================================================
 --- code-server.orig/lib/vscode/src/vs/platform/remote/browser/remoteAuthorityResolverService.ts
 +++ code-server/lib/vscode/src/vs/platform/remote/browser/remoteAuthorityResolverService.ts
-@@ -7,7 +7,7 @@ import { Emitter } from 'vs/base/common/
- import { Disposable } from 'vs/base/common/lifecycle';
+@@ -8,7 +8,7 @@ import { Disposable } from 'vs/base/comm
  import { RemoteAuthorities } from 'vs/base/common/network';
  import { URI } from 'vs/base/common/uri';
+ import { IProductService } from 'vs/platform/product/common/productService';
 -import { IRemoteAuthorityResolverService, IRemoteConnectionData, ResolvedAuthority, ResolverResult } from 'vs/platform/remote/common/remoteAuthorityResolver';
 +import { IRemoteAuthorityResolverService, IRemoteConnectionData, ResolvedAuthority, ResolvedOptions, ResolverResult } from 'vs/platform/remote/common/remoteAuthorityResolver';
+ import { getRemoteServerRootPath, parseAuthorityWithOptionalPort } from 'vs/platform/remote/common/remoteHosts';
  
  export class RemoteAuthorityResolverService extends Disposable implements IRemoteAuthorityResolverService {
- 
-@@ -20,7 +20,7 @@ export class RemoteAuthorityResolverServ
- 	private readonly _connectionToken: string | undefined;
+@@ -23,7 +23,7 @@ export class RemoteAuthorityResolverServ
+ 	private readonly _connectionToken: Promise<string> | string | undefined;
  	private readonly _connectionTokens: Map<string, string>;
  
--	constructor(connectionToken: string | undefined, resourceUriProvider: ((uri: URI) => URI) | undefined) {
-+	constructor(connectionToken: string | undefined, resourceUriProvider: ((uri: URI) => URI) | undefined, private readonly proxyEndpointTemplate?: string) {
+-	constructor(@IProductService productService: IProductService, connectionToken: Promise<string> | string | undefined, resourceUriProvider: ((uri: URI) => URI) | undefined) {
++	constructor(@IProductService productService: IProductService, connectionToken: Promise<string> | string | undefined, resourceUriProvider: ((uri: URI) => URI) | undefined, private readonly proxyEndpointTemplate?: string) {
  		super();
- 		this._cache = new Map<string, ResolverResult>();
  		this._connectionToken = connectionToken;
-@@ -59,12 +59,17 @@ export class RemoteAuthorityResolverServ
+ 		this._connectionTokens = new Map<string, string>();
+@@ -61,9 +61,14 @@ export class RemoteAuthorityResolverServ
  
- 	private _doResolveAuthority(authority: string): ResolverResult {
- 		const connectionToken = this._connectionTokens.get(authority) || this._connectionToken;
-+		let options: ResolvedOptions | undefined
+ 	private async _doResolveAuthority(authority: string): Promise<ResolverResult> {
+ 		const connectionToken = await Promise.resolve(this._connectionTokens.get(authority) || this._connectionToken);
++		let options: ResolvedOptions | undefined;
 +		if (this.proxyEndpointTemplate) {
 +			const proxyUrl = new URL(this.proxyEndpointTemplate, window.location.href);
 +			options = { extensionHostEnv: { VSCODE_PROXY_URI: decodeURIComponent(proxyUrl.toString()) }}
 +		}
- 		if (authority.indexOf(':') >= 0) {
- 			const pieces = authority.split(':');
--			return { authority: { authority, host: pieces[0], port: parseInt(pieces[1], 10), connectionToken } };
-+			return { authority: { authority, host: pieces[0], port: parseInt(pieces[1], 10), connectionToken }, options };
- 		}
- 		const port = (/^https:/.test(window.location.href) ? 443 : 80);
--		return { authority: { authority, host: authority, port: port, connectionToken } };
-+		return { authority: { authority, host: authority, port: port, connectionToken }, options };
- 	}
- 
- 	_clearResolvedAuthority(authority: string): void {
+ 		const defaultPort = (/^https:/.test(window.location.href) ? 443 : 80);
+ 		const { host, port } = parseAuthorityWithOptionalPort(authority, defaultPort);
+-		const result: ResolverResult = { authority: { authority, host: host, port: port, connectionToken } };
++		const result: ResolverResult = { authority: { authority, host: host, port: port, connectionToken }, options };
+ 		RemoteAuthorities.set(authority, result.authority.host, result.authority.port);
+ 		this._cache.set(authority, result);
+ 		this._onDidChangeConnectionData.fire();
 Index: code-server/lib/vscode/src/vs/server/node/webClientServer.ts
 ===================================================================
 --- code-server.orig/lib/vscode/src/vs/server/node/webClientServer.ts
 +++ code-server/lib/vscode/src/vs/server/node/webClientServer.ts
-@@ -288,6 +288,7 @@ export class WebClientServer {
- 					rootEndpoint: base,
- 					updateEndpoint: !this._environmentService.args['disable-update-check'] ? base + '/update/check' : undefined,
- 					logoutEndpoint: this._environmentService.args['auth'] ? base + '/logout' : undefined,
-+					proxyEndpointTemplate: base + '/proxy/{{port}}',
- 					codeServerVersion: this._productService.codeServerVersion,
- 					embedderIdentifier: 'server-distro',
- 					extensionsGallery: {
+@@ -314,6 +314,7 @@ export class WebClientServer {
+ 				rootEndpoint: base,
+ 				updateEndpoint: !this._environmentService.args['disable-update-check'] ? base + '/update/check' : undefined,
+ 				logoutEndpoint: this._environmentService.args['auth'] && this._environmentService.args['auth'] !== "none" ? base + '/logout' : undefined,
++				proxyEndpointTemplate: process.env.VSCODE_PROXY_URI ?? base + '/proxy/{{port}}/',
+ 				embedderIdentifier: 'server-distro',
+ 				extensionsGallery: this._productService.extensionsGallery,
+ 			},
 Index: code-server/lib/vscode/src/vs/workbench/browser/web.main.ts
 ===================================================================
 --- code-server.orig/lib/vscode/src/vs/workbench/browser/web.main.ts
 +++ code-server/lib/vscode/src/vs/workbench/browser/web.main.ts
-@@ -179,7 +179,7 @@ export class BrowserMain extends Disposa
+@@ -248,7 +248,7 @@ export class BrowserMain extends Disposa
  
  		// Remote
  		const connectionToken = environmentService.options.connectionToken || getCookieValue(connectionTokenCookieName);
--		const remoteAuthorityResolverService = new RemoteAuthorityResolverService(connectionToken, this.configuration.resourceUriProvider);
-+		const remoteAuthorityResolverService = new RemoteAuthorityResolverService(connectionToken, this.configuration.resourceUriProvider, this.configuration.productConfiguration?.proxyEndpointTemplate);
+-		const remoteAuthorityResolverService = new RemoteAuthorityResolverService(productService, connectionToken, this.configuration.resourceUriProvider);
++		const remoteAuthorityResolverService = new RemoteAuthorityResolverService(productService, connectionToken, this.configuration.resourceUriProvider, this.configuration.productConfiguration?.proxyEndpointTemplate);
  		serviceCollection.set(IRemoteAuthorityResolverService, remoteAuthorityResolverService);
  
  		// Signing
@@ -93,7 +105,7 @@ Index: code-server/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalE
 ===================================================================
 --- code-server.orig/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
 +++ code-server/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalEnvironment.ts
-@@ -390,7 +390,7 @@ export function createTerminalEnvironmen
+@@ -381,7 +381,7 @@ export async function createTerminalEnvi
  
  		// Sanitize the environment, removing any undesirable VS Code and Electron environment
  		// variables
@@ -102,3 +114,68 @@ Index: code-server/lib/vscode/src/vs/workbench/contrib/terminal/common/terminalE
  
  		// Merge config (settings) and ShellLaunchConfig environments
  		mergeEnvironments(env, allowedEnvFromConfig);
+Index: code-server/lib/vscode/src/vs/code/browser/workbench/workbench.ts
+===================================================================
+--- code-server.orig/lib/vscode/src/vs/code/browser/workbench/workbench.ts
++++ code-server/lib/vscode/src/vs/code/browser/workbench/workbench.ts
+@@ -21,6 +21,7 @@ import type { ICredentialsProvider } fro
+ import type { IURLCallbackProvider } from 'vs/workbench/services/url/browser/urlService';
+ import type { IWorkbenchConstructionOptions } from 'vs/workbench/browser/web.api';
+ import type { IWorkspace, IWorkspaceProvider } from 'vs/workbench/services/host/browser/browserHostService';
++import { extractLocalHostUriMetaDataForPortMapping, TunnelOptions, TunnelCreationOptions } from 'vs/platform/tunnel/common/tunnel';
+ 
+ interface ICredential {
+ 	service: string;
+@@ -511,6 +512,38 @@ function doCreateUri(path: string, query
+ 		} : undefined,
+ 		workspaceProvider: WorkspaceProvider.create(config),
+ 		urlCallbackProvider: new LocalStorageURLCallbackProvider(config.callbackRoute),
+-		credentialsProvider: config.remoteAuthority ? undefined : new LocalStorageCredentialsProvider() // with a remote, we don't use a local credentials provider
++		credentialsProvider: config.remoteAuthority ? undefined : new LocalStorageCredentialsProvider(), // with a remote, we don't use a local credentials provider
++		resolveExternalUri: (uri: URI): Promise<URI> => {
++			let resolvedUri = uri
++			const localhostMatch = extractLocalHostUriMetaDataForPortMapping(resolvedUri)
++
++			if (localhostMatch && resolvedUri.authority !== location.host) {
++				if (config.productConfiguration && config.productConfiguration.proxyEndpointTemplate) {
++					resolvedUri = URI.parse(new URL(config.productConfiguration.proxyEndpointTemplate.replace('{{port}}', localhostMatch.port.toString()), window.location.href).toString())
++				} else {
++					throw new Error(`Failed to resolve external URI: ${uri.toString()}. Could not determine base url because productConfiguration missing.`)
++				}
++			}
++
++			// If not localhost, return unmodified
++			return Promise.resolve(resolvedUri)
++		},
++		tunnelProvider: {
++			tunnelFactory: (tunnelOptions: TunnelOptions, tunnelCreationOptions: TunnelCreationOptions) => {
++				const onDidDispose: Emitter<void> = new Emitter();
++				let isDisposed = false;
++				return Promise.resolve({
++					remoteAddress: tunnelOptions.remoteAddress,
++					localAddress: `localhost:${tunnelOptions.remoteAddress.port}`,
++					onDidDispose: onDidDispose.event,
++					dispose: () => {
++						if (!isDisposed) {
++							isDisposed = true;
++							onDidDispose.fire();
++						}
++					}
++				})
++			}
++		}
+ 	});
+ })();
+Index: code-server/lib/vscode/src/vs/workbench/contrib/remote/browser/remoteExplorer.ts
+===================================================================
+--- code-server.orig/lib/vscode/src/vs/workbench/contrib/remote/browser/remoteExplorer.ts
++++ code-server/lib/vscode/src/vs/workbench/contrib/remote/browser/remoteExplorer.ts
+@@ -73,7 +73,7 @@ export class ForwardedPortsView extends 
+ 			this.contextKeyListener = undefined;
+ 		}
+ 
+-		const viewEnabled: boolean = !!forwardedPortsViewEnabled.getValue(this.contextKeyService);
++		const viewEnabled: boolean = true;
+ 
+ 		if (this.environmentService.remoteAuthority && viewEnabled) {
+ 			const viewContainer = await this.getViewContainer();

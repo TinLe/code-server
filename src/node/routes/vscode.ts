@@ -127,7 +127,10 @@ export class CodeServerRouteWrapper {
 
   private $proxyWebsocket = async (req: WebsocketRequest) => {
     const wrappedSocket = await this._socketProxyProvider.createProxy(req.ws)
-    this._codeServerMain.handleUpgrade(req, wrappedSocket)
+    // This should actually accept a duplex stream but it seems Code has not
+    // been updated to match the Node 16 types so cast for now.  There does not
+    // appear to be any code specific to sockets so this should be fine.
+    this._codeServerMain.handleUpgrade(req, wrappedSocket as net.Socket)
 
     req.ws.resume()
   }
@@ -153,9 +156,7 @@ export class CodeServerRouteWrapper {
     try {
       this._codeServerMain = await createVSServer(null, {
         ...(await toCodeArgs(args)),
-        // TODO: Make the browser helper script work.
         "without-connection-token": true,
-        "without-browser-env-var": true,
       })
     } catch (error) {
       logError(logger, "CodeServerRouteWrapper", error)
@@ -170,9 +171,9 @@ export class CodeServerRouteWrapper {
 
   constructor() {
     this.router.get("/", this.ensureCodeServerLoaded, this.$root)
-    this.router.get(/manifest.json$/, this.manifest)
+    this.router.get("/manifest.json", this.manifest)
     this.router.all("*", ensureAuthenticated, this.ensureCodeServerLoaded, this.$proxyRequest)
-    this._wsRouterWrapper.ws("/", ensureAuthenticated, this.ensureCodeServerLoaded, this.$proxyWebsocket)
+    this._wsRouterWrapper.ws("*", ensureAuthenticated, this.ensureCodeServerLoaded, this.$proxyWebsocket)
   }
 
   dispose() {

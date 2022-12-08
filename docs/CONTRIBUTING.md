@@ -1,3 +1,4 @@
+<!-- prettier-ignore-start -->
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 # Contributing
@@ -10,6 +11,9 @@
   - [Version updates to Code](#version-updates-to-code)
   - [Patching Code](#patching-code)
   - [Build](#build)
+  - [Troubleshooting](#troubleshooting)
+    - [I see "Forbidden access" when I load code-server in the browser](#i-see-forbidden-access-when-i-load-code-server-in-the-browser)
+  - ["Can only have one anonymous define call per script"](#can-only-have-one-anonymous-define-call-per-script)
   - [Help](#help)
 - [Test](#test)
   - [Unit tests](#unit-tests)
@@ -21,6 +25,7 @@
   - [Currently Known Issues](#currently-known-issues)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+<!-- prettier-ignore-end -->
 
 - [Detailed CI and build process docs](../ci)
 
@@ -31,7 +36,7 @@ for [VS
 Code](https://github.com/Microsoft/vscode/wiki/How-to-Contribute#prerequisites).
 Here is what is needed:
 
-- `node` v14.x
+- `node` v16.x
 - `git` v2.x or greater
 - [`git-lfs`](https://git-lfs.github.com)
 - [`yarn`](https://classic.yarnpkg.com/en/)
@@ -96,6 +101,8 @@ re-apply the patches.
 ### Version updates to Code
 
 1. Update the `lib/vscode` submodule to the desired upstream version branch.
+   1. `cd lib/vscode && git checkout release/1.66 && cd ../..`
+   2. `git add lib && git commit -m "chore: update Code"`
 2. Apply the patches (`quilt push -a`) or restore your stashed changes. At this
    stage you may need to resolve conflicts. For example use `quilt push -f`,
    manually apply the rejected portions, then `quilt refresh`.
@@ -105,6 +112,15 @@ re-apply the patches.
    Code. If necessary, update your version of Node.js to match.
 6. Commit the updated submodule and patches to `code-server`.
 7. Open a PR.
+
+Tip: if you're certain all patches are applied correctly and you simply need to
+refresh, you can use this trick:
+
+```shell
+while quilt push; do quilt refresh; done
+```
+
+[Source](https://raphaelhertzog.com/2012/08/08/how-to-use-quilt-to-manage-patches-in-debian-packages/)
 
 ### Patching Code
 
@@ -130,11 +146,13 @@ yarn build:vscode
 yarn release
 ```
 
+_NOTE: this does not keep `node_modules`. If you want them to be kept, use `KEEP_MODULES=1 yarn release` (if you're testing in Coder, you'll want to do this)_
+
 Run your build:
 
 ```shell
 cd release
-yarn --production
+npm install --omit=dev # Skip if you used KEEP_MODULES=1
 # Runs the built JavaScript with Node.
 node .
 ```
@@ -143,7 +161,7 @@ Build the release packages (make sure that you run `yarn release` first):
 
 ```shell
 yarn release:standalone
-yarn test:standalone-release
+yarn test:integration
 yarn package
 ```
 
@@ -151,6 +169,18 @@ yarn package
 > version. In our GitHub Actions CI, we use CentOS 7 for maximum compatibility.
 > If you need your builds to support older distros, run the build commands
 > inside a Docker container with all the build requirements installed.
+
+### Troubleshooting
+
+#### I see "Forbidden access" when I load code-server in the browser
+
+This means your patches didn't apply correctly. We have a patch to remove the auth from vanilla Code because we use our own.
+
+Try popping off the patches with `quilt pop -a` and reapplying with `quilt push -a`.
+
+### "Can only have one anonymous define call per script"
+
+Code might be trying to use a dev or prod HTML in the wrong context. You can try re-running code-server and setting `VSCODE_DEV=1`.
 
 ### Help
 
@@ -184,9 +214,8 @@ We use these to test anything related to our scripts (most of which live under `
 
 ### Integration tests
 
-These are a work in progress. We build code-server and run a script called
-[test-standalone-release.sh](../ci/build/test-standalone-release.sh), which
-ensures that code-server's CLI is working.
+These are a work in progress. We build code-server and run tests with `yarn test:integration`, which ensures that code-server builds work on their respective
+platforms.
 
 Our integration tests look at components that rely on one another. For example,
 testing the CLI requires us to build and package code-server.

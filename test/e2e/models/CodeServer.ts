@@ -4,10 +4,10 @@ import { promises as fs } from "fs"
 import * as path from "path"
 import { Page } from "playwright"
 import * as util from "util"
-import { logError, plural } from "../../../src/common/util"
+import { logError, normalize, plural } from "../../../src/common/util"
 import { onLine } from "../../../src/node/util"
 import { PASSWORD, workspaceDir } from "../../utils/constants"
-import { idleTimer, tmpdir } from "../../utils/helpers"
+import { getMaybeProxiedCodeServer, idleTimer, tmpdir } from "../../utils/helpers"
 
 interface CodeServerProcess {
   process: cp.ChildProcess
@@ -58,6 +58,7 @@ export class CodeServer {
       this.process = this.spawn()
     }
     const { address } = await this.process
+
     return address
   }
 
@@ -84,6 +85,30 @@ export class CodeServer {
       }),
       "utf8",
     )
+
+    const extensionsDir = path.join(__dirname, "../extensions")
+    const languagepacksContent = {
+      es: {
+        hash: "8d919a946475223861fa0c62665a4c50",
+        extensions: [
+          {
+            extensionIdentifier: {
+              id: "ms-ceintl.vscode-language-pack-es",
+              uuid: "47e020a1-33db-4cc0-a1b4-42f97781749a",
+            },
+            version: "1.70.0",
+          },
+        ],
+        translations: {
+          vscode: `${extensionsDir}/ms-ceintl.vscode-language-pack-es-1.70.0/translations/main.i18n.json`,
+        },
+        label: "español",
+      },
+    }
+
+    // NOTE@jsjoeio - code-server should automatically generate the languagepacks.json for
+    // using different display languages. This is a temporary workaround until we fix that.
+    await fs.writeFile(path.join(dir, "languagepacks.json"), JSON.stringify(languagepacksContent))
     return dir
   }
 
@@ -101,6 +126,8 @@ export class CodeServer {
         this.entry,
         "--extensions-dir",
         path.join(dir, "extensions"),
+        "--auth",
+        "none",
         ...this.args,
         // Using port zero will spawn on a random port.
         "--bind-addr",
@@ -121,6 +148,10 @@ export class CodeServer {
         env: {
           ...process.env,
           ...this.env,
+          // Set to empty string to prevent code-server from
+          // using the existing instance when running the e2e tests
+          // from an integrated terminal.
+          VSCODE_IPC_HOOK_CLI: "",
           PASSWORD,
         },
       })
@@ -180,6 +211,13 @@ export class CodeServer {
       proc.kill()
     }
   }
+
+  /**
+   * Whether or not authentication is enabled.
+   */
+  authEnabled(): boolean {
+    return this.args.includes("password")
+  }
 }
 
 /**
@@ -192,11 +230,7 @@ export class CodeServer {
 export class CodeServerPage {
   private readonly editorSelector = "div.monaco-workbench"
 
-  constructor(
-    private readonly codeServer: CodeServer,
-    public readonly page: Page,
-    private readonly authenticated: boolean,
-  ) {
+  constructor(private readonly codeServer: CodeServer, public readonly page: Page) {
     this.page.on("console", (message) => {
       this.codeServer.logger.debug(message.text())
     })
@@ -221,12 +255,16 @@ export class CodeServerPage {
    * editor to become available.
    */
   async navigate(endpoint = "/") {
-    const to = new URL(endpoint, await this.codeServer.address())
+    const address = await getMaybeProxiedCodeServer(this.codeServer)
+    const noramlizedUrl = normalize(address + endpoint, true)
+    const to = new URL(noramlizedUrl)
+
+    this.codeServer.logger.info(`navigating to ${to}`)
     await this.page.goto(to.toString(), { waitUntil: "networkidle" })
 
-    // Only reload editor if authenticated. Otherwise we'll get stuck
+    // Only reload editor if auth is not enabled. Otherwise we'll get stuck
     // reloading the login page.
-    if (this.authenticated) {
+    if (!this.codeServer.authEnabled()) {
       await this.reloadUntilEditorIsReady()
     }
   }
@@ -280,19 +318,41 @@ export class CodeServerPage {
   }
 
   /**
-   * Focuses Integrated Terminal
-   * by using "Terminal: Focus Terminal"
-   * from the Command Palette
+   * Checks if the test extension loaded
+   */
+  async waitForTestExtensionLoaded(): Promise<void> {
+    const selector = "text=test extension loaded"
+    this.codeServer.logger.debug("Waiting for test extension to load...")
+
+    await this.page.waitForSelector(selector)
+  }
+
+  /**
+   * Focuses the integrated terminal by navigating through the command palette.
    *
-   * This should focus the terminal no matter
-   * if it already has focus and/or is or isn't
-   * visible already.
+   * This should focus the terminal no matter if it already has focus and/or is
+   * or isn't visible already.  It will always create a new terminal to avoid
+   * clobbering parallel tests.
    */
   async focusTerminal() {
-    await this.executeCommandViaMenus("Terminal: Focus Terminal")
+    const doFocus = async (): Promise<boolean> => {
+      await this.executeCommandViaMenus("Terminal: Create New Terminal")
+      try {
+        await this.page.waitForLoadState("load")
+        await this.page.waitForSelector("textarea.xterm-helper-textarea:focus-within", { timeout: 5000 })
+        return true
+      } catch (error) {
+        return false
+      }
+    }
 
-    // Wait for terminal textarea to show up
-    await this.page.waitForSelector("textarea.xterm-helper-textarea")
+    let attempts = 1
+    while (!(await doFocus())) {
+      ++attempts
+      this.codeServer.logger.debug(`no focused terminal textarea, retrying (${attempts}/∞)`)
+    }
+
+    this.codeServer.logger.debug(`opening terminal took ${attempts} ${plural(attempts, "attempt")}`)
   }
 
   /**
@@ -420,7 +480,7 @@ export class CodeServerPage {
     let context = new Context()
     while (!(await Promise.race([openThenWaitClose(context), navigate(context)]))) {
       ++attempts
-      logger.debug("closed, retrying (${attempt}/∞)")
+      logger.debug(`closed, retrying (${attempts}/∞)`)
       context.cancel()
       context = new Context()
     }

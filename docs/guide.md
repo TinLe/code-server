@@ -1,3 +1,4 @@
+<!-- prettier-ignore-start -->
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 # Setup Guide
@@ -16,11 +17,13 @@
   - [Stripping `/proxy/<port>` from the request path](#stripping-proxyport-from-the-request-path)
   - [Proxying to create a React app](#proxying-to-create-a-react-app)
   - [Proxying to a Vue app](#proxying-to-a-vue-app)
+  - [Proxying to an Angular app](#proxying-to-an-angular-app)
 - [SSH into code-server on VS Code](#ssh-into-code-server-on-vs-code)
   - [Option 1: cloudflared tunnel](#option-1-cloudflared-tunnel)
   - [Option 2: ngrok tunnel](#option-2-ngrok-tunnel)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+<!-- prettier-ignore-end -->
 
 This article will walk you through exposing code-server securely once you've
 completed the [installation process](install.md).
@@ -88,11 +91,10 @@ we recommend using another method, such as [Let's Encrypt](#let-encrypt) instead
    using [mutagen](https://mutagen.io/documentation/introduction/installation)
    to do so. Once you've installed mutagen, you can port forward as follows:
 
-   ```console
+   ```shell
    # This is the same as the above SSH command, but it runs in the background
    # continuously. Be sure to add `mutagen daemon start` to your ~/.bashrc to
    # start the mutagen daemon when you open a shell.
-   
    mutagen forward create --name=code-server tcp:127.0.0.1:8080 < instance-ip > :tcp:127.0.0.1:8080
    ```
 
@@ -126,8 +128,8 @@ access code-server on an iPad or do not want to use SSH port forwarding.
 
 ```console
 sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/cfg/gpg/gpg.155B6D79CA56EA34.key' | sudo apt-key add -
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/cfg/setup/config.deb.txt?distro=debian&version=any-version' | sudo tee -a /etc/apt/sources.list.d/caddy-stable.list
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
 sudo apt update
 sudo apt install caddy
 ```
@@ -382,6 +384,15 @@ module.exports = {
 
 Read more about `publicPath` in the [Vue.js docs](https://cli.vuejs.org/config/#publicpath)
 
+### Proxying to an Angular app
+
+In order to use code-server's built-in proxy with Angular, you need to make the following changes in your app:
+
+1. use `<base href="./.">` in `src/index.html`
+2. add `--serve-path /absproxy/4200` to `ng serve` in your `package.json`
+
+For additional context, see [this GitHub Discussion](https://github.com/coder/code-server/discussions/5439#discussioncomment-3371983).
+
 ## SSH into code-server on VS Code
 
 [![SSH](https://img.shields.io/badge/SSH-363636?style=for-the-badge&logo=GNU+Bash&logoColor=ffffff)](https://ohmyz.sh/) [![Terminal](https://img.shields.io/badge/Terminal-2E2E2E?style=for-the-badge&logo=Windows+Terminal&logoColor=ffffff)](https://img.shields.io/badge/Terminal-2E2E2E?style=for-the-badge&logo=Windows+Terminal&logoColor=ffffff) [![Visual Studio Code](https://img.shields.io/badge/Visual_Studio_Code-007ACC?style=for-the-badge&logo=Visual+Studio+Code&logoColor=ffffff)](vscode:extension/ms-vscode-remote.remote-ssh)
@@ -407,20 +418,20 @@ sudo passwd {user} # replace user with your code-server user
 
 [![Cloudflared](https://img.shields.io/badge/Cloudflared-E4863B?style=for-the-badge&logo=cloudflare&logoColor=ffffff)](https://github.com/cloudflare/cloudflared)
 
-1.  Install [cloudflared](https://github.com/cloudflare/cloudflared#installing-cloudflared) on your local computer
-2.  Then go to `~/.ssh/config` and add the following:
+1.  Install [cloudflared](https://github.com/cloudflare/cloudflared#installing-cloudflared) on your local computer and remote server
+2.  Then go to `~/.ssh/config` and add the following on your local computer:
 
 ```shell
 Host *.trycloudflare.com
 HostName %h
-User root
+User user
 Port 22
 ProxyCommand "cloudflared location" access ssh --hostname %h
 ```
 
 3. Run `cloudflared tunnel --url ssh://localhost:22` on the remote server
 
-4. Finally on VS Code or any IDE that supports SSH, run `ssh coder@https://your-link.trycloudflare.com` or `ssh coder@your-link.trycloudflare.com`
+4. Finally on VS Code or any IDE that supports SSH, run `ssh user@https://your-link.trycloudflare.com` or `ssh user@your-link.trycloudflare.com`
 
 ### Option 2: ngrok tunnel
 

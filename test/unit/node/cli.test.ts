@@ -43,6 +43,7 @@ describe("parser", () => {
     delete process.env.LOG_LEVEL
     delete process.env.PASSWORD
     delete process.env.CS_DISABLE_FILE_DOWNLOADS
+    delete process.env.CS_DISABLE_GETTING_STARTED_OVERRIDE
     console.log = jest.fn()
   })
 
@@ -67,6 +68,8 @@ describe("parser", () => {
 
           "1",
           "--verbose",
+          ["--app-name", "custom instance name"],
+          ["--welcome-text", "welcome to code"],
           "2",
 
           ["--locale", "ja"],
@@ -95,6 +98,8 @@ describe("parser", () => {
 
           "--disable-file-downloads",
 
+          "--disable-getting-started-override",
+
           ["--host", "0.0.0.0"],
           "4",
           "--",
@@ -112,6 +117,7 @@ describe("parser", () => {
         value: path.resolve("path/to/cert"),
       },
       "disable-file-downloads": true,
+      "disable-getting-started-override": true,
       enable: ["feature1", "feature2"],
       help: true,
       host: "0.0.0.0",
@@ -123,6 +129,8 @@ describe("parser", () => {
       socket: path.resolve("mumble"),
       "socket-mode": "777",
       verbose: true,
+      "app-name": "custom instance name",
+      "welcome-text": "welcome to code",
       version: true,
       "bind-addr": "192.169.0.1:8080",
     })
@@ -362,6 +370,42 @@ describe("parser", () => {
     })
   })
 
+  it("should use env var CS_DISABLE_FILE_DOWNLOADS set to true", async () => {
+    process.env.CS_DISABLE_FILE_DOWNLOADS = "true"
+    const args = parse([])
+    expect(args).toEqual({})
+
+    const defaultArgs = await setDefaults(args)
+    expect(defaultArgs).toEqual({
+      ...defaults,
+      "disable-file-downloads": true,
+    })
+  })
+
+  it("should use env var CS_DISABLE_GETTING_STARTED_OVERRIDE", async () => {
+    process.env.CS_DISABLE_GETTING_STARTED_OVERRIDE = "1"
+    const args = parse([])
+    expect(args).toEqual({})
+
+    const defaultArgs = await setDefaults(args)
+    expect(defaultArgs).toEqual({
+      ...defaults,
+      "disable-getting-started-override": true,
+    })
+  })
+
+  it("should use env var CS_DISABLE_GETTING_STARTED_OVERRIDE set to true", async () => {
+    process.env.CS_DISABLE_GETTING_STARTED_OVERRIDE = "true"
+    const args = parse([])
+    expect(args).toEqual({})
+
+    const defaultArgs = await setDefaults(args)
+    expect(defaultArgs).toEqual({
+      ...defaults,
+      "disable-getting-started-override": true,
+    })
+  })
+
   it("should error if password passed in", () => {
     expect(() => parse(["--password", "supersecret123"])).toThrowError(
       "--password can only be set in the config file or passed in via $PASSWORD",
@@ -446,7 +490,7 @@ describe("cli", () => {
 
   beforeEach(async () => {
     delete process.env.VSCODE_IPC_HOOK_CLI
-    await fs.rmdir(vscodeIpcPath, { recursive: true })
+    await fs.rm(vscodeIpcPath, { force: true, recursive: true })
   })
 
   it("should use existing if inside code-server", async () => {
@@ -751,6 +795,7 @@ describe("toCodeArgs", () => {
     help: false,
     port: "8080",
     version: false,
+    log: undefined,
   }
 
   const testName = "vscode-args"

@@ -5,7 +5,12 @@ may think code-server is broken.  Ideally there would be a notification at the
 point where these things are used instead of this though.
 
 To test access over something like an HTTP domain or an IP address (not
-localhost).
+localhost). For example:
+
+1. run code-server
+2. use ngrok to expose code-server
+3. access via HTTP
+4. look for notification in bottom right
 
 Index: code-server/lib/vscode/src/vs/workbench/browser/client.ts
 ===================================================================
@@ -22,7 +27,7 @@ Index: code-server/lib/vscode/src/vs/workbench/browser/client.ts
  	) {
  		super();
  	}
-@@ -42,5 +45,32 @@ export class CodeServerClient extends Di
+@@ -42,5 +45,31 @@ export class CodeServerClient extends Di
  				}
  			});
  		}
@@ -44,7 +49,6 @@ Index: code-server/lib/vscode/src/vs/workbench/browser/client.ts
 +							class: undefined,
 +							enabled: true,
 +							checked: true,
-+							dispose: () => undefined,
 +							run: () => {
 +								return Promise.resolve();
 +							},

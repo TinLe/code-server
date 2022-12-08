@@ -9,55 +9,28 @@ ensures that different browser paths will be unique (for example /workspace1 and
 The easiest way to test is to open files in the same workspace using both / and
 /vscode and make sure they are not interacting with each other.
 
-It should also migrate old databases which can be tested by opening in an old
-code-server.
-
-This has e2e tests.
-
-Index: code-server/lib/vscode/src/vs/platform/storage/browser/storageService.ts
+Index: code-server/lib/vscode/src/vs/workbench/services/storage/browser/storageService.ts
 ===================================================================
---- code-server.orig/lib/vscode/src/vs/platform/storage/browser/storageService.ts
-+++ code-server/lib/vscode/src/vs/platform/storage/browser/storageService.ts
-@@ -13,6 +13,7 @@ import { InMemoryStorageDatabase, isStor
- import { ILogService } from 'vs/platform/log/common/log';
- import { AbstractStorageService, IS_NEW_KEY, StorageScope, StorageTarget } from 'vs/platform/storage/common/storage';
+--- code-server.orig/lib/vscode/src/vs/workbench/services/storage/browser/storageService.ts
++++ code-server/lib/vscode/src/vs/workbench/services/storage/browser/storageService.ts
+@@ -17,6 +17,7 @@ import { AbstractStorageService, isProfi
+ import { isUserDataProfile, IUserDataProfile } from 'vs/platform/userDataProfile/common/userDataProfile';
  import { IAnyWorkspaceIdentifier } from 'vs/platform/workspace/common/workspace';
+ import { IUserDataProfileService } from 'vs/workbench/services/userDataProfile/common/userDataProfile';
 +import { hash } from 'vs/base/common/hash';
  
  export class BrowserStorageService extends AbstractStorageService {
  
-@@ -36,7 +37,11 @@ export class BrowserStorageService exten
+@@ -297,7 +298,11 @@ export class IndexedDBStorageDatabase ex
  	}
  
- 	private getId(scope: StorageScope): string {
--		return scope === StorageScope.GLOBAL ? 'global' : this.payload.id;
+ 	static async createWorkspaceStorage(workspaceId: string, logService: ILogService): Promise<IIndexedDBStorageDatabase> {
+-		return IndexedDBStorageDatabase.create({ id: workspaceId }, logService);
 +		// Add a unique ID based on the current path for per-workspace databases.
 +		// This prevents workspaces on different machines that share the same domain
 +		// and file path from colliding (since it does not appear IndexedDB can be
 +		// scoped to a path) as long as they are hosted on different paths.
-+		return scope === StorageScope.GLOBAL ? 'global' : (this.payload.id + '-' + hash(location.pathname.toString().replace(/\/$/, "")).toString(16));
++		return IndexedDBStorageDatabase.create({ id: workspaceId + '-' + hash(location.pathname.toString().replace(/\/$/, "")).toString(16) }, logService);
  	}
  
- 	protected async doInitialize(): Promise<void> {
-@@ -75,6 +80,21 @@ export class BrowserStorageService exten
- 		const firstWorkspaceOpen = this.workspaceStorage.getBoolean(IS_NEW_KEY);
- 		if (firstWorkspaceOpen === undefined) {
- 			this.workspaceStorage.set(IS_NEW_KEY, true);
-+			// Migrate the old database.
-+			let db: IIndexedDBStorageDatabase | undefined
-+			try {
-+				db = await IndexedDBStorageDatabase.create({ id: this.payload.id }, this.logService)
-+				const items = await db.getItems()
-+				for (const [key, value] of items) {
-+					this.workspaceStorage.set(key, value);
-+				}
-+			} catch (error) {
-+				this.logService.error(`[IndexedDB Storage ${this.payload.id}] migrate error: ${toErrorMessage(error)}`);
-+			} finally {
-+				if (db) {
-+					db.close()
-+				}
-+			}
- 		} else if (firstWorkspaceOpen) {
- 			this.workspaceStorage.set(IS_NEW_KEY, false);
- 		}
+ 	static async create(options: IndexedDBStorageDatabaseOptions, logService: ILogService): Promise<IIndexedDBStorageDatabase> {

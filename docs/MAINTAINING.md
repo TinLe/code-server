@@ -1,3 +1,4 @@
+<!-- prettier-ignore-start -->
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 # Maintaining
@@ -8,13 +9,13 @@
 - [Workflow](#workflow)
   - [Milestones](#milestones)
   - [Triage](#triage)
-  - [Project boards](#project-boards)
 - [Versioning](#versioning)
 - [Pull requests](#pull-requests)
   - [Merge strategies](#merge-strategies)
   - [Changelog](#changelog)
 - [Releases](#releases)
   - [Publishing a release](#publishing-a-release)
+    - [Release Candidates](#release-candidates)
     - [AUR](#aur)
     - [Docker](#docker)
     - [Homebrew](#homebrew)
@@ -25,6 +26,7 @@
   - [Troubleshooting](#troubleshooting)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
+<!-- prettier-ignore-end -->
 
 This document is meant to serve current and future maintainers of code-server,
 as well as share our workflow for maintaining the project.
@@ -42,7 +44,7 @@ Occasionally, other Coder employees may step in time to time to assist with code
 
 To onboard a new maintainer to the project, please make sure to do the following:
 
-- [ ] Add to [coder/code-server-reviewers](https://github.com/orgs/coder/teams/code-server-reviewers)
+- [ ] Add to [coder/code-server](https://github.com/orgs/coder/teams/code-server)
 - [ ] Add as Admin under [Repository Settings > Access](https://github.com/coder/code-server/settings/access)
 - [ ] Add to [npm Coder org](https://www.npmjs.com/org/coder)
 - [ ] Add as [AUR maintainer](https://aur.archlinux.org/packages/code-server/) (talk to Colin)
@@ -72,7 +74,7 @@ Here are the milestones we use and how we use them:
 - "On Deck" -> Work under consideration for upcoming milestones.
 - "Backlog Candidates" -> Work that is not yet accepted for the backlog. We wait
   for the community to weigh in.
-- "<0.0.0>" -> Work to be done for a specific version.
+- "<Month>" -> Work to be done for said month.
 
 With this flow, any un-assigned issues are essentially in triage state. Once
 triaged, issues are either "Backlog" or "Backlog Candidates". They will
@@ -90,19 +92,6 @@ We use the following process for triaging GitHub issues:
    1. If it should be fixed soon, add to version milestone or "On Deck"
    2. If not urgent, add to "Backlog"
    3. Otherwise, add to "Backlog Candidate" for future consideration
-
-### Project boards
-
-We use project boards for projects or goals that span multiple milestones.
-
-Think of this as a place to put miscellaneous things (like testing, clean up
-stuff, etc). As a maintainer, random tasks may come up here and there. The
-project boards give you places to add temporary notes before opening a new
-issue. Given that our release milestones function off of issues, we believe
-tasks should have dedicated issues.
-
-Project boards also give us a way to separate the issue triage from
-bigger-picture, long-term work.
 
 ## Versioning
 
@@ -151,41 +140,26 @@ changelog](https://github.com/emacs-mirror/emacs/blob/master/etc/NEWS).
 
 ## Releases
 
-With each release, we rotate the role of release manager to ensure every
-maintainer goes through the process. This helps us keep documentation up-to-date
-and encourages us to continually review and improve the flow.
-
-If you're the current release manager, follow these steps:
-
-1. Create a [release issue](../.github/ISSUE_TEMPLATE/release.md)
-1. Fill out checklist
-1. Publish the release
-1. After release is published, close release milestone
-
 ### Publishing a release
 
-1. Create a new branch called `v0.0.0` (replace 0s with actual version aka v4.3.0)
-1. Run `yarn release:prep` and type in the new version (e.g., `3.8.1`)
-1. GitHub Actions will generate the `npm-package`, `release-packages` and
-   `release-images` artifacts. You do not have to wait for this step to complete
-   before proceeding.
-1. Run `yarn release:github-draft` to create a GitHub draft release from the
-   template with the updated version.
-1. Summarize the major changes in the release notes and link to the relevant
-   issues.
-1. Change the @ to target the version branch. Example: `v3.9.0 @ Target: v3.9.0`
-1. Wait for the `npm-package`, `release-packages` and `release-images` artifacts
-   to build.
-1. Run `yarn release:github-assets` to download the `release-packages` artifact.
-   They will upload them to the draft release.
-1. Run some basic sanity tests on one of the released packages (pay special
-   attention to making sure the terminal works).
-1. Publish the release and merge the PR. CI will automatically grab the
+1. Go to GitHub Actions > Draft release > Run workflow off commit you want to
+   release. CI will automatically upload the artifacts to the release. Make sure CI
+   has finished on that commit.
+1. CI will automatically grab the
    artifacts, publish the NPM package from `npm-package`, and publish the Docker
    Hub image from `release-images`.
-1. Update the AUR package. Instructions for updating the AUR package are at
-   [coder/code-server-aur](https://github.com/coder/code-server-aur).
-1. Wait for the npm package to be published.
+1. Publish release.
+1. After, create a new branch called `release/v0.0.0` (replace 0s with actual version aka v4.5.0)
+1. Summarize the major changes in the `CHANGELOG.md`
+1. Bump chart version in `Chart.yaml`.
+
+#### Release Candidates
+
+We prefer to do release candidates so the community can test things before a full-blown release. To do this follow the same steps as above but:
+
+1. Only bump version in `package.json`
+1. use `0.0.0-rc.0`
+1. When you publish the release, select "pre-release"
 
 #### AUR
 

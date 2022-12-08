@@ -10,7 +10,7 @@ main() {
 
   source ./ci/lib.sh
 
-  rsync "$RELEASE_PATH/" "$RELEASE_PATH-standalone"
+  rsync --exclude yarn.lock "$RELEASE_PATH/" "$RELEASE_PATH-standalone"
   RELEASE_PATH+=-standalone
 
   # We cannot find the path to node from $PATH because yarn shims a script to ensure
@@ -24,11 +24,9 @@ main() {
   rsync ./ci/build/code-server.sh "$RELEASE_PATH/bin/code-server"
   rsync "$node_path" "$RELEASE_PATH/lib/node"
 
-  ln -s "./bin/code-server" "$RELEASE_PATH/code-server"
-  ln -s "./lib/node" "$RELEASE_PATH/node"
-
-  cd "$RELEASE_PATH"
-  yarn --production --frozen-lockfile
+  pushd "$RELEASE_PATH"
+  npm install --unsafe-perm --omit=dev
+  popd
 }
 
 main "$@"

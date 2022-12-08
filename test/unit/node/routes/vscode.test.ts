@@ -4,6 +4,8 @@ import { clean, tmpdir } from "../../../utils/helpers"
 import * as httpserver from "../../../utils/httpserver"
 import * as integration from "../../../utils/integration"
 
+// TODO@jsjoeio - move these to integration tests since they rely on Code
+// to be built
 describe("vscode", () => {
   let codeServer: httpserver.HttpServer | undefined
 
@@ -33,10 +35,10 @@ describe("vscode", () => {
       switch (route) {
         case "/":
         case "/vscode/":
-          expect(html).toContain(`src="./static/`)
+          expect(html).toMatch(/src="\.\/[a-z]+-[0-9a-z]+\/static\//)
           break
         case "/vscode":
-          expect(html).toContain(`src="./vscode/static/`)
+          expect(html).toMatch(/src="\.\/vscode\/[a-z]+-[0-9a-z]+\/static\//)
           break
       }
     }

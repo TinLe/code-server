@@ -3,6 +3,12 @@ Store a static reference to the IPC socket
 This lets us use it to open files inside code-server from outside of
 code-server.
 
+To test this:
+1. run code-server
+2. open file outside of code-server i.e. `code-server <path-to-file`
+
+It should open in your existing code-server instance.
+
 Index: code-server/lib/vscode/src/vs/workbench/api/node/extHostExtensionService.ts
 ===================================================================
 --- code-server.orig/lib/vscode/src/vs/workbench/api/node/extHostExtensionService.ts
@@ -18,7 +24,7 @@ Index: code-server/lib/vscode/src/vs/workbench/api/node/extHostExtensionService.
  import * as performance from 'vs/base/common/performance';
  import { createApiFactoryAndRegisterActors } from 'vs/workbench/api/common/extHost.api.impl';
  import { RequireInterceptor } from 'vs/workbench/api/common/extHostRequireInterceptor';
-@@ -69,6 +71,10 @@ export class ExtHostExtensionService ext
+@@ -72,6 +74,10 @@ export class ExtHostExtensionService ext
  		if (this._initData.remote.isRemote && this._initData.remote.authority) {
  			const cliServer = this._instaService.createInstance(CLIServer);
  			process.env['VSCODE_IPC_HOOK_CLI'] = cliServer.ipcHandlePath;

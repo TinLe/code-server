@@ -25,6 +25,9 @@ spec:
       {{- if .Values.hostnameOverride }}
       hostname: {{ .Values.hostnameOverride }}
       {{- end }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
       {{- if .Values.securityContext.enabled }}
       securityContext:
         fsGroup: {{ .Values.securityContext.fsGroup }}
@@ -58,6 +61,17 @@ spec:
           {{- if .Values.securityContext.enabled }}
           securityContext:
             runAsUser: {{ .Values.securityContext.runAsUser }}
+          {{- end }}
+          {{- if .Values.lifecycle.enabled }}
+          lifecycle:
+            {{- if .Values.lifecycle.postStart }}
+            postStart:
+              {{ toYaml .Values.lifecycle.postStart | nindent 14 }}
+            {{- end }}
+            {{- if .Values.lifecycle.preStop }}
+            preStop:
+              {{ toYaml .Values.lifecycle.preStop | nindent 14 }}
+            {{- end }}
           {{- end }}
           env:
         {{- if .Values.extraVars }}
@@ -116,7 +130,7 @@ spec:
       {{- end }}
     {{- with .Values.affinity }}
       affinity:
-        {{- toYaml . | nindent 8 }}
+        {{- tpl . $ | nindent 8 }}
     {{- end }}
     {{- with .Values.tolerations }}
       tolerations:

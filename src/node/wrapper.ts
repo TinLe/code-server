@@ -147,7 +147,7 @@ abstract class Process {
  * Child process that will clean up after itself if the parent goes away and can
  * perform a handshake with the parent and ask it to relaunch.
  */
-class ChildProcess extends Process {
+export class ChildProcess extends Process {
   public logger = logger.named(`child:${process.pid}`)
 
   public constructor(private readonly parentPid: number) {
@@ -203,8 +203,9 @@ class ChildProcess extends Process {
 
 /**
  * Parent process wrapper that spawns the child process and performs a handshake
- * with it. Will relaunch the child if it receives a SIGUSR1 or is asked to by
- * the child. If the child otherwise exits the parent will also exit.
+ * with it. Will relaunch the child if it receives a SIGUSR1 or SIGUSR2 or is
+ * asked to by the child. If the child otherwise exits the parent will also
+ * exit.
  */
 export class ParentProcess extends Process {
   public logger = logger.named(`parent:${process.pid}`)
@@ -224,6 +225,11 @@ export class ParentProcess extends Process {
 
     process.on("SIGUSR1", async () => {
       this.logger.info("Received SIGUSR1; hotswapping")
+      this.relaunch()
+    })
+
+    process.on("SIGUSR2", async () => {
+      this.logger.info("Received SIGUSR2; hotswapping")
       this.relaunch()
     })
 
@@ -286,14 +292,18 @@ export class ParentProcess extends Process {
     const child = this.spawn()
     this.child = child
 
-    // Log both to stdout and to the log directory.
+    // Log child output to stdout/stderr and to the log directory.
     if (child.stdout) {
-      child.stdout.pipe(this.logStdoutStream)
-      child.stdout.pipe(process.stdout)
+      child.stdout.on("data", (data) => {
+        this.logStdoutStream.write(data)
+        process.stdout.write(data)
+      })
     }
     if (child.stderr) {
-      child.stderr.pipe(this.logStderrStream)
-      child.stderr.pipe(process.stderr)
+      child.stderr.on("data", (data) => {
+        this.logStderrStream.write(data)
+        process.stderr.write(data)
+      })
     }
 
     this.logger.debug(`spawned inner process ${child.pid}`)
@@ -307,12 +317,11 @@ export class ParentProcess extends Process {
   }
 
   private spawn(): cp.ChildProcess {
-    // Use spawn (instead of fork) to use the new binary in case it was updated.
-    return cp.spawn(process.argv[0], process.argv.slice(1), {
+    return cp.fork(path.join(__dirname, "entry"), {
       env: {
         ...process.env,
         CODE_SERVER_PARENT_PID: process.pid.toString(),
-        NODE_OPTIONS: `--max-old-space-size=2048 ${process.env.NODE_OPTIONS || ""}`,
+        NODE_EXEC_PATH: process.execPath,
       },
       stdio: ["pipe", "pipe", "pipe", "ipc"],
     })

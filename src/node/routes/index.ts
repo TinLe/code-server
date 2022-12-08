@@ -56,6 +56,8 @@ export const register = async (app: App, args: DefaultedArgs): Promise<Disposabl
     // /healthz|/healthz/ needs to be excluded otherwise health checks will make
     // it look like code-server is always in use.
     if (!/^\/healthz\/?$/.test(req.url)) {
+      // NOTE@jsjoeio - intentionally not awaiting the .beat() call here because
+      // we don't want to slow down the request.
       heart.beat()
     }
 
@@ -79,6 +81,13 @@ export const register = async (app: App, args: DefaultedArgs): Promise<Disposabl
       return res.redirect(`https://${req.headers.host}${req.originalUrl}`)
     }
 
+    // Return security.txt.
+    if (req.originalUrl === "/security.txt" || req.originalUrl === "/.well-known/security.txt") {
+      const resourcePath = path.resolve(rootPath, "src/browser/security.txt")
+      res.set("Content-Type", getMediaMime(resourcePath))
+      return res.send(await fs.readFile(resourcePath))
+    }
+
     // Return robots.txt.
     if (req.originalUrl === "/robots.txt") {
       const resourcePath = path.resolve(rootPath, "src/browser/robots.txt")
@@ -92,8 +101,8 @@ export const register = async (app: App, args: DefaultedArgs): Promise<Disposabl
   app.router.use("/", domainProxy.router)
   app.wsRouter.use("/", domainProxy.wsRouter.router)
 
-  app.router.all("/proxy/(:port)(/*)?", (req, res) => {
-    pathProxy.proxy(req, res)
+  app.router.all("/proxy/(:port)(/*)?", async (req, res) => {
+    await pathProxy.proxy(req, res)
   })
   app.wsRouter.get("/proxy/(:port)(/*)?", async (req) => {
     await pathProxy.wsProxy(req as pluginapi.WebsocketRequest)
@@ -101,8 +110,8 @@ export const register = async (app: App, args: DefaultedArgs): Promise<Disposabl
   // These two routes pass through the path directly.
   // So the proxied app must be aware it is running
   // under /absproxy/<someport>/
-  app.router.all("/absproxy/(:port)(/*)?", (req, res) => {
-    pathProxy.proxy(req, res, {
+  app.router.all("/absproxy/(:port)(/*)?", async (req, res) => {
+    await pathProxy.proxy(req, res, {
       passthroughPath: true,
     })
   })

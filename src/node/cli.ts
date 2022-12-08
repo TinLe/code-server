@@ -1,6 +1,6 @@
 import { field, Level, logger } from "@coder/logger"
 import { promises as fs } from "fs"
-import yaml from "js-yaml"
+import { load } from "js-yaml"
 import * as os from "os"
 import * as path from "path"
 import { canConnect, generateCertificate, generatePassword, humanPath, paths, isNodeJSErrnoException } from "./util"
@@ -50,6 +50,8 @@ export interface UserProvidedCodeArgs {
   "github-auth"?: string
   "disable-update-check"?: boolean
   "disable-file-downloads"?: boolean
+  "disable-workspace-trust"?: boolean
+  "disable-getting-started-override"?: boolean
 }
 
 /**
@@ -84,6 +86,8 @@ export interface UserProvidedArgs extends UserProvidedCodeArgs {
   "ignore-last-opened"?: boolean
   link?: OptionalString
   verbose?: boolean
+  "app-name"?: string
+  "welcome-text"?: string
   /* Positional arguments. */
   _?: string[]
 }
@@ -160,7 +164,16 @@ export const options: Options<Required<UserProvidedArgs>> = {
   },
   "disable-file-downloads": {
     type: "boolean",
-    description: "Disable file downloads from Code.",
+    description:
+      "Disable file downloads from Code. This can also be set with CS_DISABLE_FILE_DOWNLOADS set to 'true' or '1'.",
+  },
+  "disable-workspace-trust": {
+    type: "boolean",
+    description: "Disable Workspace Trust feature. This switch only affects the current session.",
+  },
+  "disable-getting-started-override": {
+    type: "boolean",
+    description: "Disable the coder/coder override in the Help: Getting Started page.",
   },
   // --enable can be used to enable experimental features. These features
   // provide no guarantees.
@@ -232,7 +245,16 @@ export const options: Options<Required<UserProvidedArgs>> = {
 
   log: { type: LogLevel },
   verbose: { type: "boolean", short: "vvv", description: "Enable verbose logging." },
-
+  "app-name": {
+    type: "string",
+    short: "an",
+    description: "The name to use in branding. Will be shown in titlebar and welcome message",
+  },
+  "welcome-text": {
+    type: "string",
+    short: "w",
+    description: "Text to show on login page",
+  },
   link: {
     type: OptionalString,
     description: `
@@ -500,7 +522,7 @@ export async function setDefaults(cliArgs: UserProvidedArgs, configArgs?: Config
       args.verbose = false
       break
     case LogLevel.Warn:
-      logger.level = Level.Warning
+      logger.level = Level.Warn
       args.verbose = false
       break
     case LogLevel.Error:
@@ -542,8 +564,12 @@ export async function setDefaults(cliArgs: UserProvidedArgs, configArgs?: Config
     args.password = process.env.PASSWORD
   }
 
-  if (process.env.CS_DISABLE_FILE_DOWNLOADS === "1") {
+  if (process.env.CS_DISABLE_FILE_DOWNLOADS?.match(/^(1|true)$/)) {
     args["disable-file-downloads"] = true
+  }
+
+  if (process.env.CS_DISABLE_GETTING_STARTED_OVERRIDE?.match(/^(1|true)$/)) {
+    args["disable-getting-started-override"] = true
   }
 
   const usingEnvHashedPassword = !!process.env.HASHED_PASSWORD
@@ -640,7 +666,7 @@ export function parseConfigFile(configFile: string, configPath: string): ConfigA
     return { config: configPath }
   }
 
-  const config = yaml.load(configFile, {
+  const config = load(configFile, {
     filename: configPath,
   })
   if (!config || typeof config === "string") {
@@ -788,6 +814,7 @@ export interface CodeArgs extends UserProvidedCodeArgs {
   "without-connection-token"?: boolean
   "without-browser-env-var"?: boolean
   compatibility: string
+  log: string[] | undefined
 }
 
 /**
@@ -809,5 +836,6 @@ export const toCodeArgs = async (args: DefaultedArgs): Promise<CodeArgs> => {
     help: !!args.help,
     version: !!args.version,
     port: args.port?.toString(),
+    log: args.log ? [args.log] : undefined,
   }
 }

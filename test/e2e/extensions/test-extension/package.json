@@ -3,8 +3,9 @@
   "description": "code-server test extension",
   "version": "0.0.1",
   "publisher": "coder",
+  "license": "MIT",
   "activationEvents": [
-    "onCommand:codeServerTest.proxyUri"
+    "onStartupFinished"
   ],
   "engines": {
     "vscode": "^1.56.0"
@@ -15,6 +16,11 @@
       {
         "command": "codeServerTest.proxyUri",
         "title": "Get proxy URI",
+        "category": "code-server"
+      },
+      {
+        "command": "codeServerTest.asExternalUri",
+        "title": "asExternalUri test",
         "category": "code-server"
       }
     ]

@@ -11,14 +11,270 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Code v99.99.999
 
-### Added
 ### Changed
+### Added
 ### Deprecated
 ### Removed
 ### Fixed
 ### Security
 
 -->
+
+## [4.9.0](https://github.com/coder/code-server/releases/tag/v4.9.0) - 2022-12-06
+
+Code v1.73.1
+
+### Changed
+
+- Upgraded to Code 1.73.1
+
+### Added
+
+- `/security.txt` added as a route with info on our security policy information thanks to @ghuntley
+
+### Fixed
+
+- Installing on majaro images should now work thanks to @MrPeacockNLB for
+  adding the `--noconfirm` flag in `install.sh`
+
+### Known Issues
+
+- `--cert` on Ubuntu 22.04: OpenSSL v3 is used which breaks `pem` meaning the
+  `--cert` feature will not work. [Reference](https://github.com/adobe/fetch/pull/318#issuecomment-1306070259)
+
+## [4.8.3](https://github.com/coder/code-server/releases/tag/v4.8.3) - 2022-11-07
+
+Code v1.72.1
+
+### Added
+
+- install script now supports arch-like (i.e. manjaro, endeavourous, etc.)
+  architectures
+
+### Changed
+
+- Updated text in the Getting Started page.
+
+## [4.8.2](https://github.com/coder/code-server/releases/tag/v4.8.2) - 2022-11-02
+
+Code v1.72.1
+
+### Added
+
+- New text in the Getting Started page with info about
+  `coder/coder`. This is enabled by default but can be disabled by passing the CLI
+  flag `--disable-getting-started-override` or setting
+  `CS_DISABLE_GETTING_STARTED_OVERRIDE=1` or
+  `CS_DISABLE_GETTING_STARTED_OVERRIDE=true`.
+
+## [4.8.1](https://github.com/coder/code-server/releases/tag/v4.8.1) - 2022-10-28
+
+Code v1.72.1
+
+### Fixed
+
+- Fixed CSP error introduced in 4.8.0 that caused issues with webviews and most
+  extensions.
+
+## [4.8.0](https://github.com/coder/code-server/releases/tag/v4.8.0) - 2022-10-24
+
+Code v1.72.1
+
+### Added
+
+- Support for the Ports panel which leverages code-server's built-in proxy. It
+  also uses `VSCODE_PROXY_URI` where `{{port}}` is replace when forwarding a port.
+  Example: `VSCODE_PROXY_URI=https://{{port}}.kyle.dev` would forward an
+  application running on localhost:3000 to https://3000.kyle.dev
+- Support for `--disable-workspace-trust` CLI flag
+- Support for `--goto` flag to open file @ line:column
+- Added Ubuntu-based images for Docker releases. If you run into issues with
+  `PATH` being overwritten in Docker please try the Ubuntu image as this is a
+  problem in the Debian base image.
+
+### Changed
+
+- Updated Code to 1.72.1
+
+### Fixed
+
+- Enabled `BROWSER` environment variable
+- Patched `asExternalUri` to work so now extensions run inside code-server can use it
+
+## [4.7.1](https://github.com/coder/code-server/releases/tag/v4.7.1) - 2022-09-30
+
+Code v1.71.2
+
+### Changed
+
+- Updated Code to 1.71.2
+
+### Fixed
+
+- Fixed install script not upgrading code-server when already installed on RPM-based machines
+- Fixed install script failing to gain root permissions on FreeBSD
+
+## [4.7.0](https://github.com/coder/code-server/releases/tag/v4.7.0) - 2022-09-09
+
+Code v1.71.0
+
+### Changed
+
+- Updated Code to 1.71.0
+
+### Removed
+
+- Dropped heartbeat patch because it was implemented upstream
+
+### Fixed
+
+- Add flags --unsafe-perm --legacy-peer-deps in `npm-postinstsall.sh` which ensures installing with npm works correctly
+
+## [4.6.1](https://github.com/coder/code-server/releases/tag/v4.6.1) - 2022-09-31
+
+Code v1.70.2
+
+### Changed
+
+- Updated Code to 1.70.2
+- Updated `argon2` to 0.29.0 which should fix issues on FreeBSD
+- Updated docs to suggest using `npm` instead of `yarn`
+
+### Removed
+
+- Dropped database migration patch affected to 4.0.2 versions and earlier.
+
+### Fixed
+
+- Fixed preservation of `process.execArgv` which means you can pass `--prof` to profile code-server
+
+## [4.6.0](https://github.com/coder/code-server/releases/tag/v4.6.0) - 2022-08-17
+
+Code v1.70.1
+
+### Changed
+
+- Updated Code to 1.70.1.
+
+### Added
+
+- Added a heartbeat to sockets. This should prevent them from getting closed by
+  reverse proxy timeouts when idle like NGINX's default 60-second timeout.
+
+### Fixed
+
+- Fixed logout option appearing even when authentication is disabled.
+
+## [4.5.2](https://github.com/coder/code-server/releases/tag/v4.5.2) - 2022-08-15
+
+Code v1.68.1
+
+### Security
+
+- Fixed the proxy route not performing authentication. For example if you were
+  to run a development HTTP server using `python -m http.server 8000` then it
+  would be accessible at `my.domain/proxy/8000/` without any authentication.
+
+  If all of the following apply to you please update as soon as possible:
+
+  - You run code-server with the built-in password authentication.
+  - You run unprotected HTTP services on ports accessible by code-server.
+
+### Changed
+
+- Invoking `code-server` in the integrated terminal will now use the script that
+  comes with upstream Code. This means flags like `--wait` will be
+  automatically supported now. However the upstream script only has the ability
+  to interact with the running code-server and cannot spawn new instances. If
+  you need to spawn a new code-server from the integrated terminal please
+  specify the full path to code-server's usual script (for example
+  `/usr/bin/code-server`).
+
+### Fixed
+
+- Invoking `code-server` in the integrated terminal will now work instead of
+  erroring about not finding Node.
+
+## [4.5.1](https://github.com/coder/code-server/releases/tag/v4.5.1) - 2022-07-18
+
+Code v1.68.1
+
+### Changed
+
+- We now use `release/v<0.0.0>` for the release branch name so it doesn't
+  conflict with the tag name
+- Added `.prettierignore` to ignore formatting files in `lib/vscode`
+
+### Added
+
+- Allow more comprehensive affinity config in Helm chart
+- Added custom message in Homebrew PR to make sure code-server maintainers are
+  tagged
+- Allow setting `priorityClassName` via Helm chart
+- Added troubleshooting docs to `CONTRIBUTING.md`
+
+### Fixed
+
+- Removed default memory limit which was set via `NODE_OPTIONS`
+- Changed output in pipe to make it easier to debug code-server when doing live
+  edits
+- Fixed display-language patch to use correct path which broke in 4.5.0
+- Fixed multiple code-server windows opening when using the code-server CLI in
+  the Integrated Terminal
+- Fixed Integrated Terminal not working when web base was not the root path
+
+### Security
+
+- Updated `glob-parent` version in dependencies
+
+## [4.5.0](https://github.com/coder/code-server/releases/tag/v4.5.0) - 2022-06-29
+
+Code v1.68.1
+
+### Changed
+
+- Updated codecov to use codecov uploader
+- Moved integration tests to Jest
+- Fixed docker release to only download .deb
+- Upgraded to Code 1.68.1
+- Install `nfpm` from GitHub
+- Upgraded to TypeScript 4.6
+
+### Added
+
+- Added tests for `open`, `isWsl`, `handlePasswordValidation`
+- Provided alternate image registry to dockerhub
+- Allowed users to have scripts run on container with `ENTRYPOINTD` environment
+  variable
+
+### Fixed
+
+- Fixed open CLI command to work on macOS
+
+## [4.4.0](https://github.com/coder/code-server/releases/tag/v4.4.0) - 2022-05-06
+
+Code v1.66.2
+
+### Changed
+
+- Refactored methods in `Heart` class and made `Heart.beat()` async to make
+  testing easier.
+- Upgraded to Code 1.66.2.
+
+### Added
+
+- Added back telemetry patch which was removed in the Code reachitecture.
+- Added support to use `true` for `CS_DISABLE_FILE_DOWNLOADS` environment
+  variable. This means you can disable file downloads by setting
+  `CS_DISABLE_FILE_DOWNLOADS` to `true` or `1`.
+- Added tests for `Heart` class.
+
+### Fixed
+
+- Fixed installation issue in AUR after LICENSE rename.
+- Fixed issue with listening on IPv6 addresses.
+- Fixed issue with Docker publish action not being able to find artifacts. Now
+  it downloads the release assets from the release.
 
 ## [4.3.0](https://github.com/coder/code-server/releases/tag/v4.3.0) - 2022-04-14
 
