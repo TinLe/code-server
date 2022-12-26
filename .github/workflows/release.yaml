@@ -44,11 +44,13 @@ jobs:
         run: |
           yum install -y epel-release centos-release-scl make
           yum install -y devtoolset-9-{make,gcc,gcc-c++} jq rsync python3
+          # for keytar
+          yum install -y libsecret-devel
 
       - name: Install nfpm and envsubst
         run: |
           mkdir -p ~/.local/bin
-          curl -sSfL https://github.com/goreleaser/nfpm/releases/download/v2.3.1/nfpm_2.3.1_`uname -s`_`uname -m`.tar.gz | tar -C ~/.local/bin -zxv nfpm
+          curl -sSfL https://github.com/goreleaser/nfpm/releases/download/v2.22.2/nfpm_2.22.2_`uname -s`_`uname -m`.tar.gz | tar -C ~/.local/bin -zxv nfpm
           curl -sSfL https://github.com/a8m/envsubst/releases/download/v1.1.0/envsubst-`uname -s`-`uname -m` -o envsubst
           chmod +x envsubst
           mv envsubst ~/.local/bin
@@ -68,19 +70,9 @@ jobs:
       # NOTE: && here is deliberate - GitHub puts each line in its own `.sh`
       # file when running inside a docker container.
       - name: Build standalone release
-        run: source scl_source enable devtoolset-9 && yarn release:standalone
-
-      - name: Fetch dependencies from cache
-        id: cache-node-modules
-        uses: actions/cache@v3
-        with:
-          path: "**/node_modules"
-          key: yarn-build-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            yarn-build-
+        run: source scl_source enable devtoolset-9 && npm run release:standalone
 
       - name: Install test dependencies
-        if: steps.cache-node-modules.outputs.cache-hit != 'true'
         run: SKIP_SUBMODULE_DEPS=1 yarn --frozen-lockfile
 
       - name: Run integration tests on standalone release
@@ -127,11 +119,11 @@ jobs:
   # but this means we don't need to maintain a self-hosted runner!
 
   # NOTE@jsjoeio:
-  # We used to use 16.04 until GitHub deprecated it on September 20, 2021
-  # See here: https://github.com/actions/virtual-environments/pull/3862/files
+  # We used to use 18.04 until GitHub browned it out on December 15, 2022
+  # See here: https://github.com/actions/runner-images/issues/6002
   package-linux-cross:
     name: Linux cross-compile builds
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     timeout-minutes: 15
     needs: npm-version
     strategy:
@@ -178,6 +170,8 @@ jobs:
       - name: Decompress npm package
         run: tar -xzf package.tar.gz
 
+      # NOTE@jsjoeio - npm fails here
+      # so use yarn
       - name: Build standalone release
         run: yarn release:standalone
 
@@ -234,19 +228,9 @@ jobs:
         run: tar -xzf package.tar.gz
 
       - name: Build standalone release
-        run: yarn release:standalone
-
-      - name: Fetch dependencies from cache
-        id: cache-node-modules
-        uses: actions/cache@v3
-        with:
-          path: "**/node_modules"
-          key: yarn-build-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            yarn-build-
+        run: npm run release:standalone
 
       - name: Install test dependencies
-        if: steps.cache-node-modules.outputs.cache-hit != 'true'
         run: SKIP_SUBMODULE_DEPS=1 yarn install
 
       - name: Run native module tests on standalone release
@@ -299,8 +283,9 @@ jobs:
           branch: ${{ github.ref }}
           workflow: build.yaml
           workflow_conclusion: completed
-          check_artifacts: true
           name: npm-package
+          check_artifacts: false
+          if_no_artifact_found: fail
 
       - name: Decompress npm package
         run: tar -xzf package.tar.gz
