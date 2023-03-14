@@ -3,7 +3,15 @@ import { promises as fs } from "fs"
 import { load } from "js-yaml"
 import * as os from "os"
 import * as path from "path"
-import { canConnect, generateCertificate, generatePassword, humanPath, paths, isNodeJSErrnoException } from "./util"
+import {
+  canConnect,
+  generateCertificate,
+  generatePassword,
+  humanPath,
+  paths,
+  isNodeJSErrnoException,
+  splitOnFirstEquals,
+} from "./util"
 
 const DEFAULT_SOCKET_PATH = path.join(os.tmpdir(), "vscode-ipc")
 
@@ -84,7 +92,6 @@ export interface UserProvidedArgs extends UserProvidedCodeArgs {
   "reuse-window"?: boolean
   "new-window"?: boolean
   "ignore-last-opened"?: boolean
-  link?: OptionalString
   verbose?: boolean
   "app-name"?: string
   "welcome-text"?: string
@@ -180,7 +187,14 @@ export const options: Options<Required<UserProvidedArgs>> = {
   enable: { type: "string[]" },
   help: { type: "boolean", short: "h", description: "Show this output." },
   json: { type: "boolean" },
-  locale: { type: "string" }, // The preferred way to set the locale is via the UI.
+  locale: {
+    // The preferred way to set the locale is via the UI.
+    type: "string",
+    description: `
+      Set vscode display language and language to show on the login page, more info see
+      https://en.wikipedia.org/wiki/IETF_language_tag
+    `,
+  },
   open: { type: "boolean", description: "Open in browser on startup. Does not work remotely." },
 
   "bind-addr": {
@@ -255,15 +269,6 @@ export const options: Options<Required<UserProvidedArgs>> = {
     short: "w",
     description: "Text to show on login page",
   },
-  link: {
-    type: OptionalString,
-    description: `
-      Securely bind code-server via our cloud service with the passed name. You'll get a URL like
-      https://hostname-username.coder.co at which you can easily access your code-server instance.
-      Authorization is done via GitHub.
-    `,
-    deprecated: true,
-  },
 }
 
 export const optionDescriptions = (opts: Partial<Options<Required<UserProvidedArgs>>> = options): string[] => {
@@ -293,19 +298,6 @@ export const optionDescriptions = (opts: Partial<Options<Required<UserProvidedAr
       (typeof v.type === "object" ? ` [${Object.values(v.type).join(", ")}]` : "")
     )
   })
-}
-
-export function splitOnFirstEquals(str: string): string[] {
-  // we use regex instead of "=" to ensure we split at the first
-  // "=" and return the following substring with it
-  // important for the hashed-password which looks like this
-  // $argon2i$v=19$m=4096,t=3,p=1$0qR/o+0t00hsbJFQCKSfdQ$oFcM4rL6o+B7oxpuA4qlXubypbBPsf+8L531U7P9HYY
-  // 2 means return two items
-  // Source: https://stackoverflow.com/a/4607799/3015595
-  // We use the ? to say the the substr after the = is optional
-  const split = str.split(/=(.+)?/, 2)
-
-  return split
 }
 
 /**
@@ -539,17 +531,6 @@ export async function setDefaults(cliArgs: UserProvidedArgs, configArgs?: Config
   const addr = bindAddrFromAllSources(configArgs || {}, cliArgs)
   args.host = addr.host
   args.port = addr.port
-
-  // If we're being exposed to the cloud, we listen on a random address and
-  // disable auth.
-  if (args.link) {
-    args.host = "localhost"
-    args.port = 0
-    args.socket = undefined
-    args["socket-mode"] = undefined
-    args.cert = undefined
-    args.auth = AuthType.None
-  }
 
   if (args.cert && !args.cert.value) {
     const { cert, certKey } = await generateCertificate(args["cert-host"] || "localhost")
